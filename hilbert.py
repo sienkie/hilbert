@@ -71,7 +71,8 @@ def get_spaced_colors(n):
     return [(int(i[:2], 16), int(i[2:4], 16), int(i[4:], 16)) for i in colors]
 
 
-def hilbert(chromSizes, files, output_file, create_map=False, revert=False, threshold=0, size=2 ** depth):
+def hilbert(chromSizes, files, output_file, create_map=False, revert=False, color_legend=False,
+            threshold=0, size=2 ** depth):
     assert len(files) <= 3
 
     filetypes = [kind.split(".")[-1] for kind in files]
@@ -93,7 +94,7 @@ def hilbert(chromSizes, files, output_file, create_map=False, revert=False, thre
 
         f = open(files[i], 'r')
         flines = f.readlines()
-        if flines[0].split()[0] in ["track", "browser"]:  # TODO optional header ??
+        if flines[0].split()[0] in ["track", "browser"]:
             flines = flines[1:]
         f.close()
 
@@ -101,7 +102,6 @@ def hilbert(chromSizes, files, output_file, create_map=False, revert=False, thre
             l = line.split()
             minlen = 5 if filetypes[i] == "bed" else 4
             if len(l) >= minlen:
-                print(l)  # TODO remove
                 chr = l[0]
                 if chr in chrs:
                     relative_position = sum([chrom_sizes[chrs[c]] for c in range(0, chrs.index(chr))])
@@ -119,17 +119,22 @@ def hilbert(chromSizes, files, output_file, create_map=False, revert=False, thre
             img = ImageOps.invert(img)
         img.save(output_file)
 
+        if color_legend:
+            col = ["red", "green", "blue"]
+            if revert:
+                col = ["light blue", "pink", "yellow"]
+            with open(output_file.split(".")[0] + "_legend.txt", "w") as f:
+                for i in range(len(files)):
+                    f.write(col[i] + '\t' + files[i] + '\n')
+
         if create_map:
             data_colors = np.zeros((size, size, 3), dtype=np.uint8)  # default black pixels
             colors = get_spaced_colors(len(chrs) + 1)[1:]
 
             for i in range(len(chrs)):
-                print(i)
                 chr = chrs[i]
                 start = sum([chrom_sizes[chrs[c]] for c in range(0, chrs.index(chr))]) + 1
                 stop = start + chrom_sizes[chrs[i]] - 1
-                print(start, stop)  # TODO remove
-                print(id_to_xy(int(interpolate2HC(start))), id_to_xy(int(interpolate2HC(stop)) + 1))
                 points = [id_to_xy(px) for px in
                           range(int(interpolate2HC(start)), int(interpolate2HC(stop)) + 1)]
                 for point in points:
@@ -156,3 +161,11 @@ def hilbert(chromSizes, files, output_file, create_map=False, revert=False, thre
             img.paste(img_col, (0, 0))
             img.paste(img_collist, (size, 0))
             img.save(output_file.split(".")[0] + "_chrs_territories.png")
+
+
+def main():
+    pass
+
+
+if __name__ == "__main__":
+    main()
