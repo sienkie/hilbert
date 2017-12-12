@@ -1,28 +1,74 @@
-<tool id="hilbert_curve_vis" name="Hilbert Curve Visualisation">
+<tool id="hilbert_curve_vis" name="Hilbert Curve Visualisation" force_history_refresh="True">
 
-	<requirements></requirements>
+    <requirements>
+        <requirement type="package" version="1.1.6">PIL</requirement>
+        <requirement type="package" version="1.13.3">numpy</requirement>
+        <requirement type="package" version="1.0.0">scipy</requirement>
+    </requirements>
 
-	<description>of NGS data from bed or bedgraph files</description>
+    <description>of NGS data from bed or bedgraph files</description>
 
-	<command interpreter="python3">
-		hilbert.py
-		-i "
-		#for $input in $inputs
-			$input,
-		#end for
-		"
-	</command>
+    <command interpreter="python3">
+        hilbert.py
+        --chr_sizes "$chr_sizes"
+        --files "
+        #for $f in $series:
+        $f.input_file
+        #end for
+        "
+        --file_names "
+        #for $f in $series:
+        $f.input_file.name
+        #end for
+        "
+        --colors "
+        #for $f in $series:
+        $f.color
+        #end for
+        "
+        --threshold "
+        #for $f in $series:
+        $f.threshold
+        #end for
+        "
+        $color_map
+        $invert
+        $legend
+        --size $size
+        --output "$output"
+        --output_map "$output_map"
+        --output_legend "$output_legend"
+    </command>
 
-	<inputs>
-		<param name="inputs" multiple="True" type="data" optional="false" label=""/>
-	</inputs>
+    <inputs>
+        <param name="chr_sizes" type="data" format="tsv" label="File with chromosome sizes (.tsv)"/>
+        <repeat name="series" min="1" max="3" title="Input Files">
+            <param name="input_file" type="data" format="bed,bedgraph" label="Dataset"/>
+            <param name="color" type="select" label="Color to plot dataset with">
+                <option value="0">red</option>
+                <option value="1">green</option>
+                <option value="2">blue</option>
+            </param>
+            <param name="threshold" type="float" value="0.0" label="Threshold above which regions are colored"/>
+        </repeat>
+            <param name="color_map" type="boolean" checked="false" truevalue="--color_map True" falsevalue=""
+                   label="Create color map with chromosome territories"/>
+        <param name="invert" type="boolean" checked="false" truevalue='--invert True' falsevalue=""
+               label="Invert colors"/>
+        <param name="legend" type="boolean" checked="false" truevalue="--legend True" falsevalue=""
+               label="Create text file with color legend"/>
+        <param name="size" type="integer" value="11" label="Order of Hilbert Curve"/>
+    </inputs>
 
-	<outputs>
-		<data format="tabular" name="output" label="${tool.name} on ${on_string}"/>
-	</outputs>
-	
-	<tests></tests>
+    <outputs>
+        <data format="png" name="output" label="${tool.name} on ${on_string}"/>
+        <data format="png" name="output_map" label="${tool.name} on ${on_string} color map">
+        </data>
+        <data format="txt" name="output_legend" label="${tool.name} on ${on_string} color legend"/>
+    </outputs>
 
-	<help></help>
+    <tests></tests>
+
+    <help></help>
 
 </tool>

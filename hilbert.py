@@ -1,5 +1,6 @@
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 import numpy as np
+import argparse, os
 from scipy.interpolate import interp1d
 
 global depth
@@ -71,11 +72,19 @@ def get_spaced_colors(n):
     return [(int(i[:2], 16), int(i[2:4], 16), int(i[4:], 16)) for i in colors]
 
 
-def hilbert(chromSizes, files, output_file, create_map=False, revert=False, color_legend=False,
-            threshold=0, size=2 ** depth):
+def hilbert(chromSizes, files, output="hilbert.png", colors_list=None, color_map="", invert=False,
+            color_legend="", threshold=None, size=2 ** depth, file_names=None):
+    if not colors_list:
+        colors_list = range(len(files))
+    if not threshold:
+        threshold = [0.0 for i in files]
     assert len(files) <= 3
+    assert len(threshold) >= len(files)
+    assert len(colors_list) >= len(files)
+    if not file_names:
+        file_names = files
 
-    filetypes = [kind.split(".")[-1] for kind in files]
+    filetypes = [kind.split(".")[-1] for kind in file_names]
     for kind in filetypes:
         assert kind in ['bed', 'bedgraph', 'bdg']
 
@@ -94,8 +103,11 @@ def hilbert(chromSizes, files, output_file, create_map=False, revert=False, colo
 
         f = open(files[i], 'r')
         flines = f.readlines()
-        if flines[0].split()[0] in ["track", "browser"]:
-            flines = flines[1:]
+        while True:
+            if flines[0].split()[0] in ["track", "browser", "#"]:
+                flines = flines[1:]
+            else:
+                break
         f.close()
 
         for line in flines:
@@ -108,26 +120,26 @@ def hilbert(chromSizes, files, output_file, create_map=False, revert=False, colo
                     score = float(l[4]) if filetypes[i] == "bed" else float(l[3])
                     start = int(l[1]) + relative_position
                     stop = int(l[2]) + relative_position
-                    if score > threshold:
+                    if score > threshold[i]:
                         points = [id_to_xy(px) for px in
                                   range(int(interpolate2HC(start)), int(interpolate2HC(stop)) + 1)]
                         for point in points:
-                            data[point][i] = 255
+                            data[point][colors_list[i]] = 255
 
         img = Image.fromarray(data, 'RGB')
-        if revert:
+        if invert:
             img = ImageOps.invert(img)
-        img.save(output_file)
+        img.save(output, format="png")
 
         if color_legend:
             col = ["red", "green", "blue"]
-            if revert:
+            if invert:
                 col = ["light blue", "pink", "yellow"]
-            with open(output_file.split(".")[0] + "_legend.txt", "w") as f:
-                for i in range(len(files)):
-                    f.write(col[i] + '\t' + files[i] + '\n')
+            with open(color_legend, "w") as f:
+                for i in range(len(file_names)):
+                    f.write(col[colors_list[i]] + '\t' + file_names[i] + '\n')
 
-        if create_map:
+        if color_map:
             data_colors = np.zeros((size, size, 3), dtype=np.uint8)  # default black pixels
             colors = get_spaced_colors(len(chrs) + 1)[1:]
 
@@ -143,8 +155,9 @@ def hilbert(chromSizes, files, output_file, create_map=False, revert=False, colo
             img_col = Image.fromarray(data_colors, 'RGB')
 
             padding = 5
-            font_size = 50  # TODO: this is default font size, resize if all chromosomes wont fit
-            font = ImageFont.truetype("fonts/THSarabunNew.ttf", font_size)  # TODO: change licence --> GNU font
+            font_size = 50  #TODO relative path to font cause create_map to crash
+            # font = ImageFont.truetype("fonts/THSarabunNew.ttf", font_size)
+            font = ImageFont.load_default()
             width = max([font.getsize(c)[0] for c in chrs])
             height = max([font.getsize(c)[1] for c in chrs])
             img_collist = Image.new('RGB', (width + 2 * padding, size), (0, 0, 0))
@@ -160,12 +173,38 @@ def hilbert(chromSizes, files, output_file, create_map=False, revert=False, colo
 
             img.paste(img_col, (0, 0))
             img.paste(img_collist, (size, 0))
-            img.save(output_file.split(".")[0] + "_chrs_territories.png")
+            img.save(color_map, format="png")
 
 
-def main():
-    pass
+def run_from_galaxy():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--chr_sizes', type=str, required=True, help='tabular file with chromosome sizes')
+    parser.add_argument('--files', type=str, required=True, help='input datasets')
+    parser.add_argument('--output', type=str, required=True, help='output file')
+    parser.add_argument('--output_map', type=str, default="", help='output galaxy dataset for color map')
+    parser.add_argument('--output_legend', type=str, default="", help='output galaxy dataset for color legend')
+    parser.add_argument('--file_names', type=str, required=False, help='file names for galaxy datasets')
+    parser.add_argument('--colors', type=str, required=True, help='colors')
+    parser.add_argument('--threshold', type=str, required=True, help='thresholds')
+    parser.add_argument('--color_map', default=False, help='create color map')
+    parser.add_argument('--invert', default=False, help='invert colors')
+    parser.add_argument('--legend', default=False, help='color legend')
+    parser.add_argument('--size', default=11, help='depth of Hilbert Curve')
+    args = parser.parse_args()
+
+    inputs = args.files.split()
+    inputs_names = args.file_names.split()
+    colors = [int(i) for i in args.colors.split()]  # color list for consecutive files 0-red, 1-green, 2-blue
+    thresholds = [float(i) for i in args.threshold.split()]
+    size = 2 ** int(args.size)
+
+    #TODO do not create empty output files
+    #TODO dockstrings
+
+    hilbert(chromSizes=args.chr_sizes, files=inputs, output=args.output, colors_list=colors,
+            color_map=args.output_map if args.color_map else "", invert=args.invert, threshold=thresholds,
+            color_legend=args.output_legend if args.legend else "", size=size, file_names=inputs_names)
 
 
 if __name__ == "__main__":
-    main()
+    run_from_galaxy()
