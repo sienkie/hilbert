@@ -186,9 +186,7 @@ def run_from_galaxy():
     parser.add_argument('--file_names', type=str, required=False, help='file names for galaxy datasets')
     parser.add_argument('--colors', type=str, required=True, help='colors')
     parser.add_argument('--threshold', type=str, required=True, help='thresholds')
-    parser.add_argument('--color_map', default=False, help='create color map')
     parser.add_argument('--invert', default=False, help='invert colors')
-    parser.add_argument('--legend', default=False, help='color legend')
     parser.add_argument('--size', default=11, help='depth of Hilbert Curve')
     args = parser.parse_args()
 
@@ -198,12 +196,11 @@ def run_from_galaxy():
     thresholds = [float(i) for i in args.threshold.split()]
     size = 2 ** int(args.size)
 
-    #TODO do not create empty output files
     #TODO dockstrings
 
     hilbert(chromSizes=args.chr_sizes, files=inputs, output=args.output, colors_list=colors,
-            color_map=args.output_map if args.color_map else "", invert=args.invert, threshold=thresholds,
-            color_legend=args.output_legend if args.legend else "", size=size, file_names=inputs_names)
+            color_map=args.output_map, invert=args.invert, threshold=thresholds,
+            color_legend=args.output_legend, size=size, file_names=inputs_names)
 
 
 if __name__ == "__main__":

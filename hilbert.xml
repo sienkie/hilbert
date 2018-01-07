@@ -1,4 +1,4 @@
-<tool id="hilbert_curve_vis" name="Hilbert Curve Visualisation" force_history_refresh="True">
+<tool id="hilbert_curve_vis" name="Hilbert Curve Visualization" force_history_refresh="True">
 
     <requirements>
         <requirement type="package" version="1.1.6">PIL</requirement>
@@ -9,35 +9,38 @@
     <description>of NGS data from bed or bedgraph files</description>
 
     <command interpreter="python3">
+
         hilbert.py
         --chr_sizes "$chr_sizes"
         --files "
         #for $f in $series:
-        $f.input_file
+            $f.input_file
         #end for
         "
         --file_names "
         #for $f in $series:
-        $f.input_file.name
+            $f.input_file.name
         #end for
         "
         --colors "
         #for $f in $series:
-        $f.color
+            $f.color
         #end for
         "
         --threshold "
         #for $f in $series:
-        $f.threshold
+            $f.threshold
         #end for
         "
-        $color_map
         $invert
-        $legend
         --size $size
         --output "$output"
-        --output_map "$output_map"
-        --output_legend "$output_legend"
+        #if $out1['color_map']:
+            --output_map "$output_map"
+        #end if
+        #if $out2['legend']:
+            --output_legend "$output_legend"
+        #end if
     </command>
 
     <inputs>
@@ -51,24 +54,52 @@
             </param>
             <param name="threshold" type="float" value="0.0" label="Threshold above which regions are colored"/>
         </repeat>
-            <param name="color_map" type="boolean" checked="false" truevalue="--color_map True" falsevalue=""
+        <conditional name="out1">
+            <param name='color_map' type="boolean" checked="false" truevalue="--color_map True" falsevalue=""
                    label="Create color map with chromosome territories"/>
+        </conditional>
+        <conditional name="out2">
+            <param name="legend" type="boolean" checked="false" truevalue="--legend True" falsevalue=""
+                   label="Create text file with color legend"/>
+        </conditional>
         <param name="invert" type="boolean" checked="false" truevalue='--invert True' falsevalue=""
                label="Invert colors"/>
-        <param name="legend" type="boolean" checked="false" truevalue="--legend True" falsevalue=""
-               label="Create text file with color legend"/>
         <param name="size" type="integer" value="11" label="Order of Hilbert Curve"/>
     </inputs>
 
     <outputs>
         <data format="png" name="output" label="${tool.name} on ${on_string}"/>
         <data format="png" name="output_map" label="${tool.name} on ${on_string} color map">
+            <filter>out1['color_map']</filter>
         </data>
-        <data format="txt" name="output_legend" label="${tool.name} on ${on_string} color legend"/>
+        <data format="txt" name="output_legend" label="${tool.name} on ${on_string} color legend">
+            <filter>out2['legend']</filter>
+        </data>
     </outputs>
 
-    <tests></tests>
+    <help>
 
-    <help></help>
+**What does it do?**
+
+.. _algorithm: https://en.wikipedia.org/wiki/Hilbert_curve
+
+This tool maps genomic data stored in .bed or .bedgraph files on a Hilbert space-filling curve and creates an image file with visualization of the process. Mapping algorithm_ provides a method to transfer between one-dimensional and two-dimensional space with preservation of locality. Taking that into account this tool allows the user to:
+
+        * inspect distribution of score throughout the whole genome,
+        * compare distribution of score between up to three datasets,
+        * easily inspect the quality of data.
+
+The interface for this tool contains several options:
+
+        * **File with chromosome sizes** - Choose a .tsv file from history containing chromosomes sizes. Order of chromosomes in the file will be taken into account during visualization.
+        * **Input files** - Choose .bed or .bedgraph file from history to be visualized. You can specify a **color to plot dataset with** and the **threshold above which regions are colored**. When specified, regions with a score below the chosen threshold will be ignored during visualization. Use **Insert Input Files** option to add up to three datasets with separate colors and/or thresholds.
+        * **Create color map with chromosome territories** - If selected, the tool will create a separate .png file with chromosome territories map according to mapping algorithm.
+        * **Create text file with color legend** - If selected, the tool will create a separate .txt file with information about colors used to plot datasets with.
+        * **Invert colors** - If selected, the tool will generate printing friendly visualization on a white background instead of black. Colors used to plot datasets with also will be inverted. It is recommended to also use **create a text file with color legend** option to keep track of color changes.
+        * **Order of Hilbert Curve** - This value alongside reference chromosome sizes affect visualization precision. Using default value (11) results with creation of image with resolution 2048 x 2048px (2^11 x 2^11px). Every pixel corresponds to 2^11 x 2^11/(whole genome length) base pairs.
+
+
+
+    </help>
 
 </tool>
