@@ -19,7 +19,7 @@
         "
         --file_names "
         #for $f in $series:
-            $f.input_file.name
+            $f.input_file.name ;
         #end for
         "
         --colors "

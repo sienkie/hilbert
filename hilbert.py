@@ -1,42 +1,13 @@
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 import numpy as np
-import argparse, os
+import argparse
 from scipy.interpolate import interp1d
 
-global depth
 depth = 11
 
-# key: hilbert curve n=1 orientation
-# value: dict with pixel coords as key and value as follows:
-# (curve consecutive part, orientation of this part in next iterration)
-
-hilbert_map_bin = {
-    'a': {(0, 0): (0, 'd'), (0, 1): (1, 'a'), (1, 0): (3, 'b'), (1, 1): (2, 'a')},
-    'b': {(0, 0): (2, 'b'), (0, 1): (1, 'b'), (1, 0): (3, 'a'), (1, 1): (0, 'c')},
-    'c': {(0, 0): (2, 'c'), (0, 1): (3, 'd'), (1, 0): (1, 'c'), (1, 1): (0, 'b')},
-    'd': {(0, 0): (0, 'a'), (0, 1): (3, 'c'), (1, 0): (1, 'd'), (1, 1): (2, 'd')},
-}
-
-
-def xy_to_id(x, y, order=depth):
-    current_square = 'a'
-    position = 0
-    for i in range(order - 1, -1, -1):
-        position <<= 2
-        quad_x = 1 if x & (1 << i) else 0
-        quad_y = 1 if y & (1 << i) else 0
-        quad_position, current_square = hilbert_map_bin[current_square][(quad_x, quad_y)]
-        position |= quad_position
-    return position
-
-
-def convertToQuaternary(n, order=depth):
-    digits = []
-    while n > 0:
-        digits.insert(0, n % 4)
-        n = n // 4
-    return (order - len(digits)) * [0] + digits if len(digits) <= order else digits
-
+# key: hilbert curve n=m-1 orientation (where 'm' is current step)
+# value: dict with curve consecutive part as key and value as follows:
+# (pixel coords, orientation of this part in next iterration)
 
 hilbert_map = {
     'a': {0: ((0, 0), 'd'), 1: ((0, 1), 'a'), 3: ((1, 0), 'b'), 2: ((1, 1), 'a')},
@@ -46,11 +17,47 @@ hilbert_map = {
 }
 
 
-def id_to_xy(id, order=depth):
+def convertToQuaternary(n, order=depth):
+    """ Converts decimal number to quaternary for id_to_xy function.
+
+    Args:
+        n (int): Decimal number.
+        order (int): Order of Hilbert curve, implicating how many numbers should be returned (see examples).
+
+    Returns:
+        List of integers. If quaternary has more digits then order value returns list of quaternary digits.
+        Otherwise adds 0 at the beginning of the list until it has length equal to order value.
+
+    Examples:
+        >>> print(convertToQuaternary(17, 1))
+        [1, 0, 1]
+        >>>print(convertToQuaternary(17,5))
+        [0, 0, 1, 0, 1]
+
+    """
+    digits = []
+    while n > 0:
+        digits.insert(0, n % 4)
+        n = n // 4
+    return (order - len(digits)) * [0] + digits if len(digits) <= order else digits
+
+
+def id_to_xy(point_id, order=depth):
+    """ Maps point on line on Hilbert curve of given order.
+
+    Args:
+        point_id: ID of point on line (numbered from 0).
+        order: Order of Hilbert curve.
+
+    Returns:
+        Tuple with coordinates of point (numbered point_id) on Hilbert curve of given order.
+
+    """
+    global hilbert_map
     x0, y0 = 0, 0
     xn, yn = 2 ** order - 1, 2 ** order - 1
 
-    quaternary = convertToQuaternary(id, order)
+    quaternary = convertToQuaternary(point_id, order)
     current_square = 'a'
 
     while x0 != xn and y0 != yn:
@@ -72,8 +79,28 @@ def get_spaced_colors(n):
     return [(int(i[:2], 16), int(i[2:4], 16), int(i[4:], 16)) for i in colors]
 
 
-def hilbert(chromSizes, files, output="hilbert.png", colors_list=None, color_map="", invert=False,
+def hilbert(chrom_sizes_file, files, output="hilbert.png", colors_list=None, color_map="", invert=False,
             color_legend="", threshold=None, size=2 ** depth, file_names=None):
+    """ Creates visualization of genomic data on Hilbert curve.
+
+    Args:
+        chrom_sizes_file: Tab delimited file containing chromosomes sizes.
+            Chromosome names should be compliant with names used in data files.
+        files: List of paths to .bed or .bedgraph files.
+        output: Path to output .png file.
+        colors_list: List of colors for consecutive files (0-red, 1-green, 2-blue).
+        color_map: Optional path to output color map .png file.
+        invert: True if pixels should be colored with invert colors (0-cyan, 1-magenta, 2-yellow).
+        color_legend: Optional path to output text file with color legend.
+        threshold: Optional threshold above which regions are colored. List of floats.
+        size: Size of output image corresponding to order of Hilbert Curve. Using default order value (11) results with
+            creation of image with resolution 2048 x 2048px (2^11 x 2^11px).
+        file_names: Optional list of alternative names for files. Useful when runing from Galaxy which
+            converts all files to generic dataset (.dat) files.
+
+    Returns:
+
+    """
     if not colors_list:
         colors_list = range(len(files))
     if not threshold:
@@ -85,10 +112,11 @@ def hilbert(chromSizes, files, output="hilbert.png", colors_list=None, color_map
         file_names = files
 
     filetypes = [kind.split(".")[-1] for kind in file_names]
+
     for kind in filetypes:
         assert kind in ['bed', 'bedgraph', 'bdg']
 
-    with open(chromSizes, 'r') as f:
+    with open(chrom_sizes_file, 'r') as f:
         chromlines = f.readlines()
         chrom_sizes = {str(line.split()[0]): int(line.split()[1]) for line in chromlines}
         chrs = [line.split()[0] for line in chromlines]
@@ -155,8 +183,6 @@ def hilbert(chromSizes, files, output="hilbert.png", colors_list=None, color_map
             img_col = Image.fromarray(data_colors, 'RGB')
 
             padding = 5
-            font_size = 50  #TODO relative path to font cause create_map to crash
-            # font = ImageFont.truetype("fonts/THSarabunNew.ttf", font_size)
             font = ImageFont.load_default()
             width = max([font.getsize(c)[0] for c in chrs])
             height = max([font.getsize(c)[1] for c in chrs])
@@ -191,14 +217,12 @@ def run_from_galaxy():
     args = parser.parse_args()
 
     inputs = args.files.split()
-    inputs_names = args.file_names.split()
+    inputs_names = [x.strip() for x in args.file_names.split(';') if x.strip()]
     colors = [int(i) for i in args.colors.split()]  # color list for consecutive files 0-red, 1-green, 2-blue
     thresholds = [float(i) for i in args.threshold.split()]
     size = 2 ** int(args.size)
 
-    #TODO dockstrings
-
-    hilbert(chromSizes=args.chr_sizes, files=inputs, output=args.output, colors_list=colors,
+    hilbert(chrom_sizes_file=args.chr_sizes, files=inputs, output=args.output, colors_list=colors,
             color_map=args.output_map, invert=args.invert, threshold=thresholds,
             color_legend=args.output_legend, size=size, file_names=inputs_names)
 
